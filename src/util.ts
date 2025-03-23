@@ -31,8 +31,6 @@ class ComposedChannelCredentials extends grpc.ChannelCredentials {
   }
 
   _createSecureConnector(
-    _channelTarget, 
-    _options, 
     callCredentials?: grpc.CallCredentials
   ): SecureConnector {
     return {
