@@ -1,19 +1,22 @@
 import * as grpc from "@grpc/grpc-js";
 import { NextCall } from "@grpc/grpc-js/build/src/client-interceptors.js";
 import { ConnectionOptions } from "tls";
+import * as net from "net";
+import { SecureConnector } from "@grpc/grpc-js/build/src/channel-credentials.js";
+
 
 // NOTE: Copied from channel-credentials.ts in gRPC Node package because its not exported:
 // https://github.com/grpc/grpc-node/blob/3106057f5ad8f79a71d2ae411e116ad308a2e835/packages/grpc-js/src/call-credentials.ts#L143
 class ComposedChannelCredentials extends grpc.ChannelCredentials {
   constructor(
     private channelCredentials: KnownInsecureChannelCredentialsImpl,
-    callCreds: grpc.CallCredentials
+    private callCreds: grpc.CallCredentials
   ) {
-    super(callCreds);
+    super();
   }
   compose(callCredentials: grpc.CallCredentials) {
     const combinedCallCredentials =
-      this.callCredentials.compose(callCredentials);
+      this.callCreds.compose(callCredentials);
     return new ComposedChannelCredentials(
       this.channelCredentials,
       combinedCallCredentials
@@ -26,6 +29,22 @@ class ComposedChannelCredentials extends grpc.ChannelCredentials {
   _isSecure(): boolean {
     return false;
   }
+
+  _createSecureConnector(
+    _channelTarget, 
+    _options, 
+    callCredentials?: grpc.CallCredentials
+  ): SecureConnector {
+    return {
+      connect: async (socket: net.Socket) => {
+        return { socket, secure: false };
+      },
+      waitForReady: async () => {},
+      getCallCredentials: () => callCredentials || this.callCreds,
+      destroy: () => {}
+    };
+  }
+
   _equals(other: grpc.ChannelCredentials): boolean {
     if (this === other) {
       return true;
@@ -33,7 +52,7 @@ class ComposedChannelCredentials extends grpc.ChannelCredentials {
     if (other instanceof ComposedChannelCredentials) {
       return (
         this.channelCredentials._equals(other.channelCredentials) &&
-        this.callCredentials._equals(other.callCredentials)
+        this.callCreds._equals(other.callCreds)
       );
     } else {
       return false;
@@ -49,9 +68,7 @@ class KnownInsecureChannelCredentialsImpl extends grpc.ChannelCredentials {
   }
 
   compose(callCredentials: grpc.CallCredentials): grpc.ChannelCredentials {
-    const combinedCallCredentials =
-      this.callCredentials.compose(callCredentials);
-    return new ComposedChannelCredentials(this, combinedCallCredentials);
+    return new ComposedChannelCredentials(this, callCredentials);
   }
 
   _getConnectionOptions(): ConnectionOptions {
